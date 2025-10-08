@@ -1,5 +1,6 @@
 'use client';
 
+// Force redeploy - auth environment variables fix
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
