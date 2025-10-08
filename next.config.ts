@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next'
 
+// Force complete rebuild - TypeScript fix
 const nextConfig: NextConfig = {
   // Performance optimizations
   experimental: {
