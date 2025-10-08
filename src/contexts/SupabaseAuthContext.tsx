@@ -25,7 +25,11 @@ interface AuthContextType {
   profile: Profile | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string, userData?: { full_name?: string; phone?: string; user_type?: string }) => Promise<{ error: any }>
+  signUp: (
+    email: string,
+    password: string,
+    userData?: { full_name?: string; phone?: string; user_type?: string }
+  ) => Promise<{ error: any; data?: { user?: User | null; session?: Session | null } }>
   signInWithGoogle: () => Promise<{ error: any }>
   signInWithFacebook: () => Promise<{ error: any }>
   signOut: () => Promise<void>
@@ -191,10 +195,20 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
     try {
       console.log('Starting signup process...', { email, userData })
       
-      // First, just create the user without additional data
+      // Create the user and pass profile metadata for DB trigger
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          // Send initial profile data to user metadata so a DB trigger can create the profile row
+          data: {
+            full_name: userData?.full_name || null,
+            phone: userData?.phone || null,
+            user_type: userData?.user_type || 'farmer',
+          },
+          // Redirect back to app after email confirmation if confirmations are enabled
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+        },
       })
 
       console.log('Signup response:', { data, error })
@@ -204,62 +218,20 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
         return { error }
       }
 
-      // Wait a moment for the user to be fully created
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Manually create profile
-      if (data.user) {
-        console.log('Creating profile for user:', data.user.id)
-        
-        const newProfile = {
-          id: data.user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          full_name: userData?.full_name || null,
-          phone: userData?.phone || null,
-          location: null,
-          avatar_url: null,
-          user_type: (userData?.user_type || 'farmer') as 'farmer' | 'buyer' | 'both',
-          is_verified: false,
-          bio: null,
-          website: null,
-          social_links: {},
-        }
-        
-        console.log('Profile data to insert:', newProfile)
-        
-        // Try to create profile with upsert to handle conflicts
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .upsert([newProfile], { 
-            onConflict: 'id',
-            ignoreDuplicates: false 
-          })
-          .select()
-          .single()
-
-        if (createError) {
-          console.error('Error creating profile:', createError)
-          // Check if it's a duplicate key error (profile already exists)
-          if (createError.code === '23505') {
-            console.log('Profile already exists, fetching existing profile...')
-            const { data: existingProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', data.user.id)
-              .single()
-            
-            if (existingProfile) {
-              setProfile(existingProfile)
-            }
-          }
+      // If there is no session returned (email confirmations enabled),
+      // skip client-side profile creation to avoid 401/RLS. A DB trigger
+      // (handle_new_user) should create the profile after confirmation.
+      if (!error && data?.user) {
+        if (data.session) {
+          // We are authenticated now; ensure profile exists
+          console.log('Authenticated after sign up; ensuring profile exists for:', data.user.id)
+          await fetchProfile(data.user.id)
         } else {
-          console.log('Profile created successfully:', createdProfile)
-          setProfile(createdProfile)
+          console.log('No session after sign up (likely email confirmation enabled). Skipping client profile insert.')
         }
       }
 
-      return { error: null }
+      return { error: null, data }
     } catch (error) {
       console.error('Error in signUp:', error)
       return { error }
