@@ -1,5 +1,6 @@
 'use client'
 
+// Force fresh deployment - TypeScript fix
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
