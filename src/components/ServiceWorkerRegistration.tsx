@@ -15,8 +15,21 @@ const ServiceWorkerRegistration = () => {
           return;
         }
 
+        // Clear old caches before registering new SW
+        const cacheNames = await caches.keys();
+        await Promise.all(
+          cacheNames
+            .filter(name => name.startsWith('elghella-v') && name !== 'elghella-v4')
+            .map(name => {
+              console.log('Deleting old cache:', name);
+              return caches.delete(name);
+            })
+        );
+
         // Production: register and auto-update
-        const registration = await navigator.serviceWorker.register('/sw.js');
+        const registration = await navigator.serviceWorker.register('/sw.js', {
+          updateViaCache: 'none' // Always check for updates
+        });
 
         // If there's a waiting worker, tell it to activate
         if (registration.waiting) {
@@ -41,6 +54,11 @@ const ServiceWorkerRegistration = () => {
           reloaded = true;
           window.location.reload();
         });
+
+        // Check for updates periodically (every 5 minutes)
+        setInterval(() => {
+          registration.update();
+        }, 5 * 60 * 1000);
       } catch (err) {
         console.warn('Service Worker registration issue:', err);
       }

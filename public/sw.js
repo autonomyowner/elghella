@@ -1,5 +1,5 @@
 // Service Worker for Elghella - Agricultural Marketplace
-const CACHE_NAME = 'elghella-v3';
+const CACHE_NAME = 'elghella-v4';
 const PRECACHE_URLS = [
   '/',
   '/assets/n7l1.webp',
@@ -53,7 +53,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default: network-first with cache fallback
+  // Skip caching for non-GET requests (POST, PUT, DELETE, etc.)
+  // Cache API only supports GET requests
+  if (request.method !== 'GET') {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Skip caching for Supabase auth/API requests
+  if (request.url.includes('supabase.co')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Default: network-first with cache fallback (GET requests only)
   event.respondWith(
     (async () => {
       try {
