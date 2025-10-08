@@ -16,25 +16,74 @@ export default function SignupPage(): React.JSX.Element {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    confirmPassword: '',
     fullName: '',
     phone: '',
     location: '',
-    userType: 'farmer' as 'farmer' | 'buyer' | 'both'
+    userType: 'farmer' as 'farmer' | 'buyer',
+    acceptTerms: false
   })
-  const { signUp, signInWithGoogle, signInWithFacebook } = useSupabaseAuth();
-  const [isLoading, setIsLoading] = useState(false)
+  const { signUp } = useSupabaseAuth();
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [currentStep, setCurrentStep] = useState(1)
   
   const router = useRouter()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      // Validate form data
+      if (!formData.fullName || !formData.email || !formData.password) {
+        setError('يرجى ملء جميع الحقول المطلوبة')
+        return
+      }
+
+      if (!formData.acceptTerms) {
+        setError('يرجى الموافقة على الشروط والأحكام')
+        return
+      }
+
+      if (formData.password.length < 6) {
+        setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل')
+        return
+      }
+
+      // Sign up user
+      const { data, error: signUpError } = await signUp(formData.email, formData.password, {
+        full_name: formData.fullName,
+        phone: formData.phone,
+        location: formData.location,
+        user_type: formData.userType
+      })
+
+      if (signUpError) {
+        setError(signUpError.message)
+        return
+      }
+
+      if (data?.user) {
+        setMessage('تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني لتأكيد الحساب.')
+        // Redirect to login page after 3 seconds
+        setTimeout(() => {
+          router.push('/auth/login')
+        }, 3000)
+      }
+    } catch (err) {
+      setError('حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.')
+      console.error('Signup error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const validateStep1 = () => {
@@ -215,6 +264,20 @@ export default function SignupPage(): React.JSX.Element {
             className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl"
           >
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
+
+              {/* Success Message */}
+              {message && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-green-400 text-sm">
+                  {message}
+                </div>
+              )}
+
               {/* Full Name */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-300">الاسم الكامل</label>
